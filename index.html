@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#6750A4">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Кошелёк карт</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<script src="jsbarcode.min.js"></script>
+<style>
+/* ============ RESET & BASE ============ */
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#F6F2FF; --surface:#FFFFFF; --primary:#6750A4; --on-primary:#FFFFFF;
+  --secondary:#E8DEF8; --on-secondary:#1D192B; --text:#1D192B; --muted:#79747E;
+  --error:#B3261E; --shadow:0 2px 12px rgba(0,0,0,.12); --radius:16px;
+}
+html,body{height:100%}
+body{
+  font-family:'Segoe UI',Roboto,system-ui,sans-serif; background:var(--bg); color:var(--text);
+  display:flex; justify-content:center;
+}
+/* Телефонная рамка на десктопе */
+#app{width:100%;max-width:430px;height:100dvh;background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column}
+@media(min-width:480px){
+  #app{box-shadow:var(--shadow);border-radius:28px;margin:16px 0;height:calc(100dvh - 32px)}
+}
+/* ============ HEADER ============ */
+header{padding:20px 20px 8px;background:var(--bg)}
+header h1{font-size:24px;font-weight:700}
+header .sub{color:var(--muted);font-size:14px;margin-top:2px}
+/* ============ CAROUSEL ============ */
+.carousel-wrap{margin:12px 0 4px;position:relative}
+.carousel{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:8px 20px 16px;scrollbar-width:none}
+.carousel::-webkit-scrollbar{display:none}
+.carousel-card{min-width:280px;max-width:280px;height:164px;border-radius:20px;padding:18px;color:#fff;scroll-snap-align:start;position:relative;box-shadow:var(--shadow);flex-shrink:0;animation:cardIn .4s ease both}
+.carousel-card .store{font-size:17px;font-weight:700;letter-spacing:.3px}
+.carousel-card .num{margin-top:22px;font-size:15px;letter-spacing:2px;opacity:.95;font-family:monospace}
+.carousel-card .bal{position:absolute;bottom:16px;left:18px;font-size:13px;opacity:.9}
+.carousel-card .star{position:absolute;top:14px;right:16px;font-size:20px;opacity:.9}
+/* ============ SEARCH & FILTERS ============ */
+.controls{padding:0 20px 8px}
+.search{display:flex;align-items:center;background:var(--surface);border-radius:28px;padding:10px 16px;box-shadow:var(--shadow)}
+.search input{border:none;outline:none;flex:1;font-size:15px;background:transparent}
+.search .ico{color:var(--muted);margin-right:10px}
+.filters{display:flex;gap:8px;margin-top:10px;overflow-x:auto;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.chip{border:none;background:var(--surface);padding:8px 14px;border-radius:20px;font-size:13px;cursor:pointer;box-shadow:var(--shadow);white-space:nowrap;transition:transform .15s}
+.chip:active{transform:scale(.95)}
+.chip.active{background:var(--primary);color:var(--on-primary)}
+select.chip{appearance:none;-webkit-appearance:none}
+/* ============ GRID ============ */
+.grid{padding:4px 20px 100px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card-mini{border-radius:var(--radius);padding:14px;color:#fff;cursor:pointer;box-shadow:var(--shadow);animation:cardIn .35s ease both;transition:transform .15s}
+.card-mini:active{transform:scale(.95)}
+.card-mini .store{font-size:14px;font-weight:700}
+.card-mini .num{margin-top:10px;font-size:12px;font-family:monospace;opacity:.9}
+.card-mini .row{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.card-mini .bal{font-size:12px;opacity:.9}
+.card-mini .star{font-size:15px}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 0}
+/* ============ BOTTOM NAV ============ */
+nav{position:absolute;bottom:0;left:0;right:0;background:var(--surface);display:flex;box-shadow:0 -2px 12px rgba(0,0,0,.08);padding:6px 0 calc(6px + env(safe-area-inset-bottom));z-index:50}
+nav button{flex:1;background:none;border:none;padding:6px;cursor:pointer;color:var(--muted);font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button .mi{font-size:22px;font-family:monospace}
+nav button.active{color:var(--primary)}
+/* ============ FAB ============ */
+.fab{position:absolute;right:20px;bottom:80px;width:56px;height:56px;border-radius:50%;background:var(--primary);color:var(--on-primary);border:none;font-size:26px;box-shadow:0 4px 14px rgba(103,80,164,.4);cursor:pointer;z-index:40;transition:transform .15s}
+.fab:active{transform:scale(.9)}
+/* ============ MODAL ============ */
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,.45);z-index:60;display:none;align-items:flex-end;justify-content:center}
+.overlay.show{display:flex;animation:fadeIn .2s ease}
+.modal{background:var(--surface);width:100%;max-width:430px;border-radius:24px 24px 0 0;padding:24px 20px 30px;max-height:92%;overflow-y:auto;animation:slideUp .3s ease}
+.modal h3{font-size:18px;margin-bottom:14px}
+/* 3D карта */
+.flip-wrap{perspective:1000px;margin:10px 0 18px}
+.flip-inner{position:relative;width:100%;height:190px;transition:transform .6s;transform-style:preserve-3d}
+.flip-inner.flipped{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:20px;color:#fff;padding:18px;box-shadow:var(--shadow)}
+.face.back{transform:rotateY(180deg);background:#2B2936}
+.face .store{font-size:18px;font-weight:700}
+.face .bal{margin-top:8px;font-size:14px;opacity:.9}
+.face.back .barcode{background:#fff;padding:10px;border-radius:10px;margin-top:8px;text-align:center}
+.face.back .full-num{margin-top:10px;font-family:monospace;font-size:15px;text-align:center;display:flex;justify-content:center;align-items:center;gap:8px}
+.btn-row{display:flex;gap:10px;margin:6px 0 14px}
+.btn{flex:1;padding:11px;border:none;border-radius:12px;font-size:14px;cursor:pointer;background:var(--secondary);color:var(--on-secondary);transition:transform .15s}
+.btn:active{transform:scale(.95)}
+.btn.primary{background:var(--primary);color:var(--on-primary)}
+.btn.danger{background:#F9DEDC;color:var(--error)}
+.share-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.share-btn{width:46px;height:46px;border-radius:50%;border:none;font-size:20px;cursor:pointer;color:#fff;transition:transform .15s;display:flex;align-items:center;justify-content:center}
+.share-btn:active{transform:scale(.9)}
+.copy-text{width:100%;margin-top:10px}
+/* ============ FORM ============ */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.field input,.field select{width:100%;padding:11px 14px;border:1.5px solid #E0D8EE;border-radius:12px;font-size:15px;outline:none;background:#fff}
+.field input:focus{border-color:var(--primary)}
+.brand-pick{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:180px;overflow-y:auto}
+.brand-pick button{border:1.5px solid #E0D8EE;background:#fff;padding:8px;border-radius:10px;font-size:12px;cursor:pointer;text-align:left;transition:transform .15s}
+.brand-pick button:active{transform:scale(.95)}
+.brand-pick button.sel{border-color:var(--primary);background:var(--secondary)}
+.color-pick{display:flex;gap:8px;flex-wrap:wrap}
+.color-swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s}
+.color-swatch:active{transform:scale(.9)}
+.color-swatch.sel{border-color:var(--text)}
+.cat-pick{display:flex;gap:8px;flex-wrap:wrap}
+.cat-pick button{border:1.5px solid #E0D8EE;background:#fff;padding:8px 12px;border-radius:20px;font-size:12px;cursor:pointer}
+.cat-pick button.sel{background:var(--primary);color:#fff;border-color:var(--primary)}
+.switch-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.switch-row label{font-size:14px}
+/* ============ CATEGORIES ============ */
+.cat-grid{padding:10px 20px 100px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cat-cell{background:var(--surface);border-radius:var(--radius);padding:18px;text-align:center;box-shadow:var(--shadow);cursor:pointer;transition:transform .15s}
+.cat-cell:active{transform:scale(.95)}
+.cat-cell .ic{font-size:30px;margin-bottom:8px}
+.cat-cell .nm{font-size:14px;font-weight:600}
+.cat-cell .cnt{font-size:12px;color:var(--muted);margin-top:4px}
+/* ============ STATS ============ */
+.stats{padding:10px 20px 100px}
+.stat-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat-card{background:var(--surface);border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow)}
+.stat-card .num{font-size:22px;font-weight:800;color:var(--primary)}
+.stat-card .lbl{font-size:11px;color:var(--muted);margin-top:4px}
+.chart-box{margin-top:16px;background:var(--surface);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.chart-box h4{font-size:14px;margin-bottom:12px}
+.legend{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.legend .li{display:flex;align-items:center;gap:8px;font-size:13px}
+.legend .dot{width:12px;height:12px;border-radius:3px}
+.legend .li span:nth-child(3){margin-left:auto;color:var(--muted);font-size:12px}
+.recent{margin-top:16px;background:var(--surface);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.recent h4{font-size:14px;margin-bottom:10px}
+.recent .r{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F0EBF8;font-size:13px}
+.recent .r:last-child{border:none}
+/* ============ TOAST ============ */
+#toast{position:absolute;left:50%;bottom:90px;transform:translateX(-50%) translateY(80px);background:#322F35;color:#fff;padding:10px 20px;border-radius:24px;font-size:14px;opacity:0;transition:all .3s;z-index:100;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ============ ANIMATIONS ============ */
+@keyframes cardIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fadeIn .25s ease}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <h1>Добрый день, <span id="userName">Гость</span>! 👋</h1>
+    <div class="sub" id="summary"></div>
+  </header>
+
+  <!-- ===== TAB: WALLET ===== -->
+  <section id="tab-wallet" class="tab-panel active">
+    <div class="carousel-wrap"><div class="carousel" id="carousel"></div></div>
+    <div class="controls">
+      <div class="search"><span class="ico">🔍</span><input id="searchInput" placeholder="Поиск магазина..."></div>
+      <div class="filters">
+        <button class="chip" id="favChip">⭐️ Избранное</button>
+        <select class="chip" id="sortSelect">
+          <option value="date">По дате добавления</option>
+          <option value="alpha">По алфавиту</option>
+          <option value="balance">По балансу</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <!-- ===== TAB: CATEGORIES ===== -->
+  <section id="tab-cats" class="tab-panel"><div class="cat-grid" id="catGrid"></div></section>
+
+  <!-- ===== TAB: STATS ===== -->
+  <section id="tab-stats" class="tab-panel"><div class="stats" id="statsBox"></div></section>
+
+  <button class="fab" id="fabAdd">＋</button>
+
+  <nav>
+    <button data-tab="wallet" class="active"><span class="mi">👛</span>Кошелёк</button>
+    <button data-tab="cats"><span class="mi">🗂</span>Категории</button>
+    <button data-tab="stats"><span class="mi">📊</span>Статистика</button>
+  </nav>
+
+  <!-- ===== MODAL: DETAIL ===== -->
+  <div class="overlay" id="detailOverlay">
+    <div class="modal">
+      <div class="flip-wrap"><div class="flip-inner" id="flipInner">
+        <div class="face front" id="dFront"></div>
+        <div class="face back" id="dBack"></div>
+      </div></div>
+      <div class="btn-row">
+        <button class="btn" id="dFav">❤️ В избранное</button>
+        <button class="btn" id="dFlip">🔄 Перевернуть</button>
+        <button class="btn" id="dEdit">✏️ Изменить</button>
+        <button class="btn danger" id="dDelete">🗑 Удалить</button>
+      </div>
+      <div class="share-row" id="shareRow"></div>
+      <button class="btn copy-text" id="dCopyText">📋 Скопировать текст карты</button>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: ADD/EDIT ===== -->
+  <div class="overlay" id="formOverlay">
+    <div class="modal">
+      <h3 id="formTitle">Новая карта</h3>
+      <div class="switch-row">
+        <label>Своя карта</label>
+        <input type="checkbox" id="isCustomSwitch">
+      </div>
+      <div class="field" id="brandField">
+        <label>Выбери магазин:</label>
+        <div class="brand-pick" id="brandPick"></div>
+      </div>
+      <div class="field">
+        <label>Название магазина</label>
+        <input id="fTitle" placeholder="Магнит">
+      </div>
+      <div class="field">
+        <label>Цвет карты</label>
+        <div class="color-pick" id="colorPick"></div>
+      </div>
+      <div class="field">
+        <label>Категория</label>
+        <div class="cat-pick" id="catPick"></div>
+      </div>
+      <div class="field">
+        <label>Номер карты</label>
+        <input id="fNumber" placeholder="0000 0000 0000 0000" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>Баланс (баллы/рубли)</label>
+        <input id="fBalance" type="number" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="fSave">💾 Сохранить</button>
+        <button class="btn" id="fCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: CONFIRM ===== -->
+  <div class="overlay" id="confirmOverlay">
+    <div class="modal" style="border-radius:24px;max-width:340px;margin:auto;align-self:center">
+      <h3>Вы уверены?</h3>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:16px">Карта будет удалена безвозвратно.</p>
+      <div class="btn-row">
+        <button class="btn danger" id="confirmYes">Да, удалить</button>
+        <button class="btn" id="confirmNo">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+/* ============ DATA ============ */
+const CATEGORIES = ['Супермаркеты','Аптеки','Одежда','Кафе','Электроника','Запчасти'];
+const CAT_ICONS = { 'Супермаркеты':'🛒','Аптеки':'💊','Одежда':'👕','Кафе':'☕','Электроника':'📱','Запчасти':'🔧' };
+const COLORS = ['#6750A4','#E63946','#2A9D8F','#F4A261','#E76F51','#457B9D','#2B9348','#9B5DE5','#F15BB5','#00BBF9','#F77F00','#577590'];
+const BRANDS = [
+  {t:'Пятерочка',c:'#00A651',cat:'Супермаркеты'},{t:'Перекресток',c:'#E2001A',cat:'Супермаркеты'},
+  {t:'Магнит',c:'#ED1C24',cat:'Супермаркеты'},{t:'Лента',c:'#F58220',cat:'Супермаркеты'},
+  {t:'Ашан',c:'#D71921',cat:'Супермаркеты'},{t:'Окей',c:'#00AEEF',cat:'Супермаркеты'},
+  {t:'Дикси',c:'#E2001A',cat:'Супермаркеты'},{t:'Metro',c:'#FDB913',cat:'Супермаркеты'},
+  {t:'ВкусВилл',c:'#8CC63F',cat:'Супермаркеты'},{t:'Спортмастер',c:'#ED1C24',cat:'Одежда'},
+  {t:'Decathlon',c:'#0082C3',cat:'Одежда'},{t:'Адреналин',c:'#F37021',cat:'Одежда'},
+  {t:'OZON',c:'#005BFF',cat:'Электроника'},{t:'Яндекс.Маркет',c:'#FFCC00',cat:'Электроника'},
+  {t:'DNS',c:'#E30A17',cat:'Электроника'},{t:'Ситилинк',c:'#FF7F00',cat:'Электроника'},
+  {t:'Эльдорадо',c:'#00539F',cat:'Электроника'},{t:'М.Видео',c:'#E30613',cat:'Электроника'},
+  {t:'ИКЕА',c:'#0058A3',cat:'Электроника'},{t:'Hoff',c:'#00A0E3',cat:'Электроника'},
+  {t:'Л\'Этуаль',c:'#7B2D8B',cat:'Одежда'},{t:'Рив Гош',c:'#E1000F',cat:'Одежда'},
+  {t:'Золотое Яблоко',c:'#F4C300',cat:'Одежда'},{t:'Киностар',c:'#4B0082',cat:'Кафе'},
+  {t:'Бургер Кинг',c:'#D62300',cat:'Кафе'},{t:'KFC',c:'#A40E1A',cat:'Кафе'},
+  {t:'Макдоналдс',c:'#FFC72C',cat:'Кафе'},{t:'Додо Пицца',c:'#FF6900',cat:'Кафе'},
+];
+const STORAGE_KEY = 'wallet_cards_v1';
+const NAME_KEY = 'wallet_user_name';
+
+let cards = [];
+let currentFilter = { fav:false, cat:null, search:'' };
+let editingId = null;
+
+/* ============ STORAGE ============ */
+function loadCards(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){ cards = JSON.parse(raw); return; }
+    seedDemo();
+  }catch(e){ console.error('localStorage read error', e); seedDemo(); }
+}
+function saveCards(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(cards)); }
+  catch(e){
+    // переполнение квоты — чистим самые старые не-избранные
+    if(e.name==='QuotaExceededError'||e.code===22||e.code===1014){
+      const removable = cards.filter(c=>!c.isFavorite).sort((a,b)=>a.createdAt-b.createdAt);
+      if(removable.length){ cards = cards.filter(c=>c.isFavorite||c.id!==removable[0].id); saveCards(); toast('Квота: удалил старую карту'); }
+      else toast('Хранилище переполнено!');
+    } else toast('Ошибка сохранения');
+  }
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function maskNum(n){ return '****'+String(n).replace(/\s/g,'').slice(-4); }
+
+/* ============ DEMO DATA ============ */
+function seedDemo(){
+  const demo = [
+    ['Пятерочка','1234 5678 9012 3456',450,'#00A651','Супермаркеты',true],
+    ['Магнит','2345 6789 0123 4567',120,'#ED1C24','Супермаркеты',false],
+    ['OZON','3456 7890 1234 5678',2300,'#005BFF','Электроника',true],
+    ['Додо Пицца','4567 8901 2345 6789',80,'#FF6900','Кафе',false],
+    ['Спортмастер','5678 9012 3456 7890',0,'#ED1C24','Одежда',false],
+    ['Лента','6789 0123 4567 8901',310,'#F58220','Супермаркеты',false],
+    ['DNS','7890 1234 5678 9012',0,'#E30A17','Электроника',false],
+    ['KFC','8901 2345 6789 0123',55,'#A40E1A','Кафе',false],
+    ['ВкусВилл','9012 3456 7890 1234',200,'#8CC63F','Супермаркеты',true],
+    ['ИКЕА','0123 4567 8901 2345',150,'#0058A3','Электроника',false],
+  ];
+  const now = Date.now();
+  cards = demo.map((d,i)=>({
+    id: uid(), title:d[0], cardNumber:d[1], barcodeType:'CODE128', balance:d[2],
+    color:d[3], category:d[4], isFavorite:d[5], isCustom:false, createdAt: now - (i*86400000)
+  }));
+  saveCards();
+}
+
+/* ============ RENDER: WALLET ============ */
+function getFiltered(){
+  let list = [...cards];
+  if(currentFilter.fav) list = list.filter(c=>c.isFavorite);
+  if(currentFilter.cat) list = list.filter(c=>c.category===currentFilter.cat);
+  if(currentFilter.search) list = list.filter(c=>c.title.toLowerCase().includes(currentFilter.search.toLowerCase()));
+  const s = document.getElementById('sortSelect').value;
+  list.sort((a,b)=>{
+    if(s==='alpha') return a.title.localeCompare(b.title,'ru');
+    if(s==='balance') return b.balance-a.balance;
+    return b.createdAt-a.createdAt;
+  });
+  return list;
+}
+function render(){
+  const list = getFiltered();
+  // summary
+  const favN = cards.filter(c=>c.isFavorite).length;
+  document.getElementById('summary').textContent = `Всего карт: ${cards.length} • Избранных: ${favN}`;
+  // carousel (топ-5)
+  const car = document.getElementById('carousel');
+  car.innerHTML = list.slice(0,5).map((c,i)=>`
+    <div class="carousel-card" style="background:linear-gradient(135deg,${c.color},${shade(c.color,-30)});animation-delay:${i*60}ms" onclick="openDetail('${c.id}')">
+      <div class="store">${c.title}</div>
+      <div class="num">${maskNum(c.cardNumber)}</div>
+      <div class="bal">${c.balance!==0?'Баланс: '+c.balance+' баллов':'Баланс: 0'}</div>
+      <div class="star">${c.isFavorite?'⭐️':'☆'}</div>
+    </div>`).join('') || '<div class="empty">Нет карт</div>';
+  // grid
+  const grid = document.getElementById('grid');
+  grid.innerHTML = list.map((c,i)=>`
+    <div class="card-mini" style="background:linear-gradient(135deg,${c.color},${shade(c.color,-30)});animation-delay:${i*40}ms" onclick="openDetail('${c.id}')">
+      <div class="store">${c.title}</div>
+      <div class="num">${maskNum(c.cardNumber)}</div>
+      <div class="row"><span class="bal">${c.balance!==0?c.balance+' б':'0'}</span><span class="star">${c.isFavorite?'⭐️':'☆'}</span></div>
+    </div>`).join('') || '<div class="empty">Ничего не найдено 🔍</div>';
+}
+function shade(hex,p){
+  const n=parseInt(hex.slice(1),16); let r=(n>>16)+p,g=((n>>8)&255)+p,b=(n&255)+p;
+  r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
+  return '#'+((r<<16)|(g<<8)|b).toString(16).padStart(6,'0');
+}
+
+/* ============ CATEGORIES ============ */
+function renderCats(){
+  const g = document.getElementById('catGrid');
+  g.innerHTML = CATEGORIES.map(cat=>{
+    const n = cards.filter(c=>c.category===cat).length;
+    return `<div class="cat-cell" onclick="filterByCat('${cat}')">
+      <div class="ic">${CAT_ICONS[cat]||'🏷'}</div><div class="nm">${cat}</div><div class="cnt">${n} карт</div>
+    </div>`;
+  }).join('');
+}
+function filterByCat(cat){
+  currentFilter.cat = cat;
+  switchTab('wallet');
+  render();
+}
+
+/* ============ STATS ============ */
+function renderStats(){
+  const total = cards.length;
+  const sumBal = cards.reduce((s,c)=>s+c.balance,0);
+  const favN = cards.filter(c=>c.isFavorite).length;
+  const box = document.getElementById('statsBox');
+  box.innerHTML = `
+    <div class="stat-cards">
+      <div class="stat-card"><div class="num" data-target="${total}">0</div><div class="lbl">Всего карт</div></div>
+      <div class="stat-card"><div class="num" data-target="${sumBal}">0</div><div class="lbl">Сумма баллов</div></div>
+      <div class="stat-card"><div class="num" data-target="${favN}">0</div><div class="lbl">Избранных</div></div>
+    </div>
+    <div class="chart-box"><h4>Распределение по категориям</h4><svg id="pieChart" width="100%" height="180"></svg><div class="legend" id="pieLegend"></div></div>
+    <div class="recent"><h4>Недавно добавленные</h4>${cards.slice().sort((a,b)=>b.createdAt-a.createdAt).slice(0,5).map(c=>`
+      <div class="r"><span>${c.title}</span><span style="color:var(--muted)">${new Date(c.createdAt).toLocaleDateString('ru-RU')}</span></div>`).join('')||'<div class="r">Пока пусто</div>'}</div>`;
+  animateNums();
+  drawPie();
+}
+function animateNums(){
+  document.querySelectorAll('.stat-card .num').forEach(el=>{
+    const target = +el.dataset.target; const dur=900; const t0=performance.now();
+    const step=(t)=>{ const p=Math.min(1,(t-t0)/dur); el.textContent=Math.round(target*(1-Math.pow(1-p,3))); if(p<1)requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+function drawPie(){
+  const counts = CATEGORIES.map(cat=>cards.filter(c=>c.category===cat).length);
+  const svg = document.getElementById('pieChart');
+  const legend = document.getElementById('pieLegend');
+  const total = cards.length||1;
+  let angle = -Math.PI/2; const cx=90,cy=90,R=70;
+  const palette = ['#6750A4','#E63946','#2A9D8F','#F4A261','#E76F51','#457B9D'];
+  let html='';
+  counts.forEach((n,i)=>{
+    if(!n) return;
+    const a0=angle, a1=angle+(n/total)*2*Math.PI; angle=a1;
+    const x0=cx+R*Math.cos(a0),y0=cy+R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy+R*Math.sin(a1);
+    const large=(a1-a0)>Math.PI?1:0;
+    const d = n===total?`<circle cx="${cx}" cy="${cy}" r="${R}" fill="${palette[i]%palette.length}"/>`
+      :`<path d="M${cx} ${cy} L${x0} ${y0} A${R} ${R} 0 ${large} 1 ${x1} ${y1} Z" fill="${palette[i]}"/>`;
+    svg.innerHTML += d;
+    html += `<div class="li"><span class="dot" style="background:${palette[i]}"></span><span>${CATEGORIES[i]}</span><span>${n} (${Math.round(n/total*100)}%)</span></div>`;
+  });
+  legend.innerHTML = html;
+}
+
+/* ============ DETAIL ============ */
+let detailId=null;
+function openDetail(id){
+  detailId=id;
+  const c = cards.find(x=>x.id===id); if(!c) return;
+  document.getElementById('dFront').innerHTML = `
+    <div class="store">${c.title}</div>
+    <div class="bal">${c.balance!==0?'Баланс: '+c.balance+' баллов':'Баланс: 0'}</div>
+    <div style="position:absolute;bottom:16px;right:18px;font-size:12px;opacity:.8">${CAT_ICONS[c.category]||''} ${c.category}</div>`;
+  document.getElementById('dBack').innerHTML = `
+    <div class="store" style="font-size:14px">${c.title}</div>
+    <div class="barcode"><svg id="barcodeSvg"></svg></div>
+    <div class="full-num"><span>${c.cardNumber}</span><button class="btn" style="padding:4px 10px;font-size:11px" onclick="copyNum('${c.id}')">📋</button></div>`;
+  const flip=document.getElementById('flipInner');
+  flip.classList.remove('flipped');
+  setTimeout(()=>{ try{ JsBarcode('#barcodeSvg', c.cardNumber.replace(/\s/g,''), {format:c.barcodeType||'CODE128',width:2,height:48,displayValue:false}); }catch(e){ console.warn('barcode',e); } },80);
+  document.getElementById('dFav').textContent = c.isFavorite?'💔 Убрать из избранного':'❤️ В избранное';
+  // share buttons
+  const shareRow = document.getElementById('shareRow');
+  const text = `Моя карта ${c.title}: Номер ${c.cardNumber}. Баланс: ${c.balance}.`;
+  const enc = encodeURIComponent(text);
+  shareRow.innerHTML = [
+    ['✈️','https://t.me/share/url?url='+enc],
+    ['🟢','https://wa.me/?text='+enc],
+    ['💙','https://vk.com/share.php?comment='+enc],
+    ['🅾️','https://connect.ok.ru/offer?url='+encodeURIComponent(location.href)+'&description='+enc],
+    ['💬','sms:?body='+enc],
+    ['✉️','mailto:?subject='+encodeURIComponent('Моя карта '+c.title)+'&body='+enc],
+  ].map(([ic,url])=>`<button class="share-btn" style="background:${c.color}" onclick="window.open('${url}','_blank')">${ic}</button>`).join('');
+  document.getElementById('dCopyText').onclick = ()=>{ copyText(text); };
+  document.getElementById('detailOverlay').classList.add('show');
+}
+function copyNum(id){ const c=cards.find(x=>x.id===id); if(c) copyText(c.cardNumber); }
+function copyText(t){
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>toast('Скопировано ✅'),()=>toast('Не удалось скопировать'));
+  else { const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Скопировано ✅'); }
+}
+function closeDetail(){ document.getElementById('detailOverlay').classList.remove('show'); detailId=null; }
+document.getElementById('dFlip').onclick = ()=>document.getElementById('flipInner').classList.toggle('flipped');
+document.getElementById('dFav').onclick = ()=>{
+  const c=cards.find(x=>x.id===detailId); if(!c)return; c.isFavorite=!c.isFavorite; saveCards(); render(); openDetail(detailId);
+};
+document.getElementById('dDelete').onclick = ()=>{
+  document.getElementById('detailOverlay').classList.remove('show');
+  document.getElementById('confirmOverlay').classList.add('show');
+};
+document.getElementById('confirmYes').onclick = ()=>{
+  cards = cards.filter(c=>c.id!==detailId); saveCards(); render(); renderCats();
+  document.getElementById('confirmOverlay').classList.remove('show'); toast('Карта удалена 🗑');
+};
+document.getElementById('confirmNo').onclick = ()=>{ document.getElementById('confirmOverlay').classList.remove('show'); document.getElementById('detailOverlay').classList.add('show'); };
+document.getElementById('dEdit').onclick = ()=>{ document.getElementById('detailOverlay').classList.remove('show'); openForm(detailId); };
+
+/* ============ FORM ============ */
+function openForm(id){
+  editingId = id||null;
+  document.getElementById('formTitle').textContent = id?'Редактировать карту':'Новая карта';
+  const isCustom = !id || cards.find(c=>c.id===id).isCustom;
+  document.getElementById('isCustomSwitch').checked = isCustom;
+  const brandPick = document.getElementById('brandPick');
+  brandPick.innerHTML = BRANDS.map((b,i)=>`<button data-i="${i}" onclick="pickBrand(${i})">${b.t}</button>`).join('');
+  // colors
+  document.getElementById('colorPick').innerHTML = COLORS.map((c,i)=>`<div class="color-swatch" style="background:${c}" data-i="${i}" onclick="pickColor(${i})"></div>`).join('');
+  // cats
+  document.getElementById('catPick').innerHTML = CATEGORIES.map((c,i)=>`<button data-i="${i}" onclick="pickCat(${i})">${CAT_ICONS[c]} ${c}</button>`).join('');
+  if(id){
+    const c=cards.find(x=>x.id===id);
+    document.getElementById('fTitle').value=c.title;
+    document.getElementById('fNumber').value=c.cardNumber;
+    document.getElementById('fBalance').value=c.balance;
+    selColor=COLORS.indexOf(c.color); selCat=CATEGORIES.indexOf(c.category);
+  } else {
+    document.getElementById('fTitle').value=''; document.getElementById('fNumber').value=''; document.getElementById('fBalance').value='';
+    selColor=0; selCat=0;
+  }
+  syncFormUI();
+  document.getElementById('formOverlay').classList.add('show');
+}
+let selColor=0, selCat=0;
+function pickBrand(i){ const b=BRANDS[i]; document.getElementById('fTitle').value=b.t; selColor=COLORS.indexOf(b.c)>=0?COLORS.indexOf(b.c):0; selCat=CATEGORIES.indexOf(b.cat)>=0?CATEGORIES.indexOf(b.cat):0; syncFormUI(); }
+function pickColor(i){ selColor=i; syncFormUI(); }
+function pickCat(i){ selCat=i; syncFormUI(); }
+function syncFormUI(){
+  document.querySelectorAll('#colorPick .color-swatch').forEach((el,i)=>el.classList.toggle('sel',i===selColor));
+  document.querySelectorAll('#catPick button').forEach((el,i)=>el.classList.toggle('sel',i===selCat));
+  const custom = document.getElementById('isCustomSwitch').checked;
+  document.getElementById('brandField').classList.toggle('hidden', custom);
+}
+document.getElementById('isCustomSwitch').onchange = syncFormUI;
+document.getElementById('fSave').onclick = ()=>{
+  const title = document.getElementById('fTitle').value.trim();
+  const number = document.getElementById('fNumber').value.trim();
+  const balance = parseFloat(document.getElementById('fBalance').value)||0;
+  if(!title || !number){ toast('Заполни название и номер!'); return; }
+  const isCustom = document.getElementById('isCustomSwitch').checked;
+  const rec = {
+    id: editingId||uid(), title, cardNumber:number, barcodeType:'CODE128', balance,
+    color:COLORS[selColor], category:CATEGORIES[selCat], isCustom,
+    isFavorite: editingId ? (cards.find(c=>c.id===editingId)?.isFavorite||false) : false,
+    createdAt: editingId ? (cards.find(c=>c.id===editingId)?.createdAt||Date.now()) : Date.now()
+  };
+  if(editingId){ cards = cards.map(c=>c.id===editingId?rec:c); toast('Сохранено ✅'); }
+  else { cards.push(rec); toast('Карта добавлена ✅'); }
+  saveCards(); render(); renderCats();
+  document.getElementById('formOverlay').classList.remove('show');
+};
+document.getElementById('fCancel').onclick = ()=>document.getElementById('formOverlay').classList.remove('show');
+
+/* ============ TABS / NAV ============ */
+function switchTab(name){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  if(name==='cats') renderCats();
+  if(name==='stats') renderStats();
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+
+/* ============ EVENTS ============ */
+document.getElementById('fabAdd').onclick = ()=>openForm(null);
+document.getElementById('searchInput').oninput = (e)=>{ currentFilter.search=e.target.value; render(); };
+document.getElementById('favChip').onclick = (e)=>{ currentFilter.fav=!currentFilter.fav; e.target.classList.toggle('active',currentFilter.fav); render(); };
+document.getElementById('sortSelect').onchange = render;
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',(e)=>{ if(e.target===o) o.classList.remove('show'); }));
+
+/* ============ TOAST ============ */
+let toastTimer=null;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+/* ============ INIT ============ */
+const savedName = localStorage.getItem(NAME_KEY);
+if(savedName) document.getElementById('userName').textContent = savedName;
+else {
+  const n = prompt('Как тебя зовут?') || 'Гость';
+  try{ localStorage.setItem(NAME_KEY, n); }catch(e){}
+  document.getElementById('userName').textContent = n;
+}
+loadCards();
+render();
+renderCats();
+</script>
+</body>
+</html>
