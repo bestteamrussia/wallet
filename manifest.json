@@ -1,0 +1,16 @@
+{
+  "name": "Кошелёк карт",
+  "short_name": "Кошелёк",
+  "description": "Кошелёк дисконтных карт: магазины, бонусы, штрихкоды",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F2FF",
+  "theme_color": "#6750A4",
+  "lang": "ru",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
