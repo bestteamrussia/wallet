@@ -1,5 +1,5 @@
 /* Service Worker: кеширует статику для офлайн-работы */
-const CACHE = 'wallet-v1';
+const CACHE = 'wallet-v2';
 const ASSETS = [
   './',
   './index.html',
